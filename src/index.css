@@ -1,0 +1,93 @@
+:root {
+  color: #132233;
+  background:
+    radial-gradient(circle at top, rgba(242, 92, 84, 0.22), transparent 32%),
+    linear-gradient(180deg, #f5f2eb 0%, #fffaf2 55%, #fff 100%);
+  font-family:
+    "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  line-height: 1.45;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  --text: #32465d;
+  --text-strong: #132233;
+  --muted: #64748a;
+  --hero-text: #fff5ea;
+  --accent: #f25c54;
+  --accent-contrast: #fffaf4;
+  --panel: rgba(255, 252, 247, 0.96);
+  --surface: rgba(255, 248, 238, 0.95);
+  --input-bg: rgba(255, 255, 255, 0.95);
+  --timer-bg: rgba(13, 34, 66, 0.08);
+  --border-soft: rgba(19, 34, 51, 0.1);
+  --border-strong: rgba(19, 34, 51, 0.16);
+  --danger: #b42318;
+  --shadow: 0 18px 48px rgba(19, 34, 51, 0.1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+}
+
+body,
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+input,
+select {
+  color: inherit;
+}
+
+button {
+  appearance: none;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+h1,
+h2 {
+  color: var(--text-strong);
+  font-family:
+    "Archivo Narrow", "Arial Narrow", "Franklin Gothic Medium", sans-serif;
+  line-height: 0.95;
+  letter-spacing: -0.03em;
+}
+
+h1 {
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+}
+
+h2 {
+  font-size: clamp(1.4rem, 4.5vw, 2.3rem);
+}
+
+p {
+  margin: 0;
+}
+
+.eyebrow {
+  margin-bottom: 10px;
+  color: var(--accent);
+  font-size: 0.77rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
