@@ -120,6 +120,8 @@ The frontend should only send player intents such as:
 - ready for next question
 - return to lobby
 
+The expected WebSocket message contract and game/lobby state machine are documented in [protocol.md](./protocol.md).
+
 ## Notes
 
 - OIDC is intentionally not implemented yet. The entry point exists so it can be added later without redesigning the landing flow.
