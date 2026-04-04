@@ -13,6 +13,7 @@ export type Player = {
   name: string
   score: number
   isReadyForNext: boolean
+  hasLockedAnswer?: boolean
   didAnswerCorrectly?: boolean
 }
 
@@ -27,7 +28,6 @@ export type Question = {
   prompt: string
   topic: string
   options: QuestionOption[]
-  correctOptionId: string
 }
 
 export type GamePhase =
@@ -45,10 +45,12 @@ export type GameSession = {
   phase: GamePhase
   players: [Player, Player]
   currentQuestion: Question | null
-  selectedAnswerId: string | null
+  correctAnswerId: string | null
   questionEndsAt: string | null
   resultMessage: string | null
   winnerLabel: string | null
 }
 
 export type AppScreen = 'landing' | 'lobby' | 'game'
+
+export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
