@@ -1,5 +1,5 @@
 import type { BackendEvent, BackendTransport } from './transport'
-import type { AuthMode, GameSession, LobbyGame, Player, Question } from '../types'
+import type { GameSession, LobbyGame, Player, Question } from '../types'
 
 const QUESTION_TIME_MS = 30_000
 
@@ -172,7 +172,6 @@ type PendingTimers = {
 export function createMockTransport(): BackendTransport {
   const listeners = new Set<(event: BackendEvent) => void>()
   let playerName = ''
-  let authMode: AuthMode = 'guest'
   let selfPlayerId = 'player_1'
   let lobbyGames = [...OPEN_GAMES_SEED]
   let session: GameSession | null = null
@@ -474,19 +473,11 @@ export function createMockTransport(): BackendTransport {
         listeners.delete(listener)
       }
     },
-    enterGuest(displayName) {
+    identifyPlayer(displayName) {
       playerName = displayName
-      authMode = 'guest'
       emit({
         type: 'auth.ready',
         playerId: selfPlayerId,
-        authMode,
-      })
-    },
-    startOidc() {
-      emit({
-        type: 'error',
-        message: 'OIDC will be added later. Guest mode stays available in v1.',
       })
     },
     subscribeLobby() {

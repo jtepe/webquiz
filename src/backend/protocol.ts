@@ -1,4 +1,4 @@
-import type { AuthMode, LobbyGame, Player, Question } from '../types'
+import type { LobbyGame, Player, Question } from '../types'
 
 export type ClientMessage =
   | {
@@ -11,16 +11,11 @@ export type ClientMessage =
       }
     }
   | {
-      type: 'auth.guest.enter'
+      type: 'player.identify'
       requestId: string
       payload: {
         displayName: string
       }
-    }
-  | {
-      type: 'auth.oidc.start'
-      requestId: string
-      payload: Record<string, never>
     }
   | {
       type: 'lobby.subscribe'
@@ -84,14 +79,6 @@ export type ServerMessage =
       requestId?: string
       payload: {
         playerId: string
-        authMode: AuthMode
-      }
-    }
-  | {
-      type: 'auth.oidc.pending'
-      requestId?: string
-      payload: {
-        message: string
       }
     }
   | {

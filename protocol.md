@@ -142,13 +142,13 @@ Notes:
 - `resumeToken` is optional for future reconnect support.
 - Reconnect behavior is out of scope for v1, but the field keeps the protocol extensible.
 
-### `auth.guest.enter`
+### `player.identify`
 
-Enter the application as a guest.
+Provide the display name the WebSocket game backend should use for this player.
 
 ```json
 {
-  "type": "auth.guest.enter",
+  "type": "player.identify",
   "requestId": "req_2",
   "payload": {
     "displayName": "Mira"
@@ -156,17 +156,10 @@ Enter the application as a guest.
 }
 ```
 
-### `auth.oidc.start`
+Notes:
 
-Start OIDC login. This is a placeholder in v1 and may return an error or redirect instruction until implemented.
-
-```json
-{
-  "type": "auth.oidc.start",
-  "requestId": "req_3",
-  "payload": {}
-}
-```
+- The WebSocket backend does not handle OIDC directly.
+- The frontend resolves OIDC user details via `${IDP_URL}/me`, redirects to `${IDP_URL}/login?redirect={MY_HOST}` on `401`, and then sends the resulting display name over the socket.
 
 ### `lobby.subscribe`
 
@@ -281,22 +274,7 @@ Acknowledge socket/session initialization.
   "type": "session.ready",
   "requestId": "req_1",
   "payload": {
-    "playerId": "player_1",
-    "authMode": "guest"
-  }
-}
-```
-
-### `auth.oidc.pending`
-
-Indicates that OIDC exists conceptually but is not yet active in v1.
-
-```json
-{
-  "type": "auth.oidc.pending",
-  "requestId": "req_3",
-  "payload": {
-    "message": "OIDC is not enabled yet."
+    "playerId": "player_1"
   }
 }
 ```
@@ -644,7 +622,6 @@ Suggested error codes:
 - `ANSWER_ALREADY_LOCKED`
 - `QUESTION_TIMEOUT`
 - `NOT_A_GAME_MEMBER`
-- `OIDC_NOT_ENABLED`
 
 ## State Machine
 
@@ -652,8 +629,7 @@ Suggested error codes:
 
 ```text
 landing
-  -> auth.guest.enter -> lobby
-  -> auth.oidc.start -> landing
+  -> frontend OIDC or guest identity resolved -> lobby
 
 lobby
   -> game.create -> waiting_for_player
@@ -691,8 +667,7 @@ results
 ```mermaid
 stateDiagram-v2
   [*] --> Landing
-  Landing --> Lobby: auth.guest.enter
-  Landing --> Landing: auth.oidc.start
+  Landing --> Lobby: player.identify
   Lobby --> WaitingForPlayer: game.create
   Lobby --> QuestionActive: game.join
   WaitingForPlayer --> QuestionActive: game.player_joined / question.started
@@ -717,19 +692,22 @@ stateDiagram-v2
 ## Minimal Happy-Path Sequence
 
 1. Client connects and sends `session.hello`
-2. Client sends `auth.guest.enter`
-3. Client sends `lobby.subscribe`
-4. Server sends `lobby.snapshot`
-5. Client sends `game.create` or `game.join`
-6. Server sends `game.created` or `game.joined`
-7. Server sends `game.player_joined` if needed
-8. Server sends `question.started`
-9. Each client sends `answer.submit`
-10. Server sends `answer.accepted` and `answer.locked`
-11. Server sends `question.revealed`
-12. Each client sends `question.next.ready`
-13. Server sends `question.started` for the next round, or `game.results` after the last one
-14. Client sends `lobby.return`
+2. Frontend resolves player identity:
+   - guest locally, or
+   - OIDC by calling `${IDP_URL}/me`
+3. Client sends `player.identify`
+4. Client sends `lobby.subscribe`
+5. Server sends `lobby.snapshot`
+6. Client sends `game.create` or `game.join`
+7. Server sends `game.created` or `game.joined`
+8. Server sends `game.player_joined` if needed
+9. Server sends `question.started`
+10. Each client sends `answer.submit`
+11. Server sends `answer.accepted` and `answer.locked`
+12. Server sends `question.revealed`
+13. Each client sends `question.next.ready`
+14. Server sends `question.started` for the next round, or `game.results` after the last one
+15. Client sends `lobby.return`
 
 ## Versioning
 

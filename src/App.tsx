@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useMachine } from '@xstate/react'
 import { assign, setup } from 'xstate'
 import './App.css'
+import { beginOrResumeOidcLogin, hasPendingOidcLogin } from './auth/oidc'
 import { createBackendTransport } from './backend'
 import type { BackendEvent } from './backend/transport'
 import type {
@@ -27,8 +28,8 @@ type AppContext = {
 
 type AppEvent =
   | { type: 'ENTER_GUEST'; playerName: string }
-  | { type: 'AUTH_READY'; playerId: string; authMode: AuthMode }
-  | { type: 'CHOOSE_OIDC' }
+  | { type: 'ENTER_OIDC'; playerName: string }
+  | { type: 'AUTH_READY'; playerId: string }
   | { type: 'LOAD_LOBBY'; lobbyGames: LobbyGame[] }
   | { type: 'SYNC_SESSION'; session: GameSession | null }
   | { type: 'SET_SELECTED_ANSWER'; answerId: string | null }
@@ -66,17 +67,18 @@ const appMachine = setup({
             error: null,
           })),
         },
+        ENTER_OIDC: {
+          actions: assign(({ event }) => ({
+            authMode: 'oidc',
+            playerName: event.playerName,
+            screen: 'lobby',
+            error: null,
+          })),
+        },
         AUTH_READY: {
           actions: assign(({ event }) => ({
             playerId: event.playerId,
-            authMode: event.authMode,
           })),
-        },
-        CHOOSE_OIDC: {
-          actions: assign({
-            authMode: 'oidc',
-            error: null,
-          }),
         },
         LOAD_LOBBY: {
           actions: assign(({ event }) => ({
@@ -148,7 +150,6 @@ function App() {
           send({
             type: 'AUTH_READY',
             playerId: event.playerId,
-            authMode: event.authMode,
           })
           break
         case 'lobby.snapshot':
@@ -193,6 +194,40 @@ function App() {
     return () => window.clearInterval(timer)
   }, [state.context.session])
 
+  useEffect(() => {
+    if (!hasPendingOidcLogin() || state.context.playerName) {
+      return
+    }
+
+    let cancelled = false
+
+    const resumeOidc = async () => {
+      try {
+        const result = await beginOrResumeOidcLogin()
+        if (!result || cancelled) {
+          return
+        }
+        send({ type: 'ENTER_OIDC', playerName: result.displayName })
+        transport.identifyPlayer(result.displayName)
+        transport.subscribeLobby()
+      } catch (error) {
+        if (cancelled) {
+          return
+        }
+        send({
+          type: 'SET_ERROR',
+          message: error instanceof Error ? error.message : 'OIDC login failed.',
+        })
+      }
+    }
+
+    void resumeOidc()
+
+    return () => {
+      cancelled = true
+    }
+  }, [send, state.context.playerName, transport])
+
   const countdown = useMemo(() => {
     const endsAt = state.context.session?.questionEndsAt
     if (!endsAt) {
@@ -208,8 +243,25 @@ function App() {
       return
     }
     send({ type: 'ENTER_GUEST', playerName: trimmed })
-    transport.enterGuest(trimmed)
+    transport.identifyPlayer(trimmed)
     transport.subscribeLobby()
+  }
+
+  const enterLobbyWithOidc = async () => {
+    try {
+      const result = await beginOrResumeOidcLogin()
+      if (!result) {
+        return
+      }
+      send({ type: 'ENTER_OIDC', playerName: result.displayName })
+      transport.identifyPlayer(result.displayName)
+      transport.subscribeLobby()
+    } catch (error) {
+      send({
+        type: 'SET_ERROR',
+        message: error instanceof Error ? error.message : 'OIDC login failed.',
+      })
+    }
   }
 
   const createGame = () => {
@@ -258,8 +310,7 @@ function App() {
               onGuestNameChange={setGuestName}
               onContinueAsGuest={enterLobbyAsGuest}
               onOidcClick={() => {
-                send({ type: 'CHOOSE_OIDC' })
-                transport.startOidc()
+                void enterLobbyWithOidc()
               }}
             />
           }
