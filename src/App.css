@@ -2,6 +2,32 @@
   min-height: 100svh;
 }
 
+.connection-banner {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  justify-content: center;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent-contrast);
+}
+
+.connection-banner.is-connected {
+  background: #2b7a2d;
+}
+
+.connection-banner.is-connecting {
+  background: #16355f;
+}
+
+.connection-banner.is-disconnected {
+  background: #b42318;
+}
+
 .screen {
   width: min(1120px, calc(100% - 24px));
   margin: 0 auto;

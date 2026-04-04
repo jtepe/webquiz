@@ -44,8 +44,8 @@ This repository currently focuses on the client only. Server-side room managemen
 
 - `src/App.tsx`
   Main UI flow and route rendering.
-- `src/mockServer.ts`
-  Mocked backend/session transport used during frontend development.
+- `src/backend/`
+  Backend transport layer, including the real WebSocket client, protocol types, and mock fallback transport.
 - `src/types.ts`
   Shared quiz, lobby, player, and session types.
 - `src/App.css`
@@ -65,6 +65,18 @@ Start the dev server:
 
 ```bash
 bun run dev
+```
+
+Environment switches:
+
+```bash
+VITE_WS_URL=ws://localhost:8080 bun run dev
+```
+
+Use the mock backend explicitly:
+
+```bash
+VITE_USE_MOCK_BACKEND=true bun run dev
 ```
 
 Run the production build:

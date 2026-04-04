@@ -1,4 +1,5 @@
-import type { GameSession, LobbyGame, Player, Question } from './types'
+import type { BackendEvent, BackendTransport } from './transport'
+import type { AuthMode, GameSession, LobbyGame, Player, Question } from '../types'
 
 const QUESTION_TIME_MS = 30_000
 
@@ -8,7 +9,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'science-1',
       topic: 'Science',
       prompt: 'Which planet has the most moons currently known?',
-      correctOptionId: 'd',
       options: [
         { id: 'a', label: 'A', text: 'Earth' },
         { id: 'b', label: 'B', text: 'Mars' },
@@ -21,7 +21,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'science-2',
       topic: 'Science',
       prompt: 'What gas do plants absorb from the atmosphere?',
-      correctOptionId: 'b',
       options: [
         { id: 'a', label: 'A', text: 'Oxygen' },
         { id: 'b', label: 'B', text: 'Carbon dioxide' },
@@ -34,7 +33,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'science-3',
       topic: 'Science',
       prompt: 'How many bones are in an adult human body?',
-      correctOptionId: 'c',
       options: [
         { id: 'a', label: 'A', text: '186' },
         { id: 'b', label: 'B', text: '198' },
@@ -49,7 +47,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'cinema-1',
       topic: 'Cinema',
       prompt: 'Which film won the Academy Award for Best Picture for 2020?',
-      correctOptionId: 'a',
       options: [
         { id: 'a', label: 'A', text: 'Parasite' },
         { id: 'b', label: 'B', text: '1917' },
@@ -62,7 +59,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'cinema-2',
       topic: 'Cinema',
       prompt: 'Which director made "Spirited Away"?',
-      correctOptionId: 'e',
       options: [
         { id: 'a', label: 'A', text: 'Makoto Shinkai' },
         { id: 'b', label: 'B', text: 'Satoshi Kon' },
@@ -75,7 +71,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'cinema-3',
       topic: 'Cinema',
       prompt: 'What color pill does Neo take in "The Matrix"?',
-      correctOptionId: 'd',
       options: [
         { id: 'a', label: 'A', text: 'Green' },
         { id: 'b', label: 'B', text: 'Yellow' },
@@ -90,7 +85,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'world-1',
       topic: 'World',
       prompt: 'Which river runs through Budapest?',
-      correctOptionId: 'b',
       options: [
         { id: 'a', label: 'A', text: 'Rhine' },
         { id: 'b', label: 'B', text: 'Danube' },
@@ -103,7 +97,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'world-2',
       topic: 'World',
       prompt: 'What is the capital city of New Zealand?',
-      correctOptionId: 'c',
       options: [
         { id: 'a', label: 'A', text: 'Auckland' },
         { id: 'b', label: 'B', text: 'Christchurch' },
@@ -116,7 +109,6 @@ const QUESTIONS: Record<string, Question[]> = {
       id: 'world-3',
       topic: 'World',
       prompt: 'Which country has the largest coastline in the world?',
-      correctOptionId: 'a',
       options: [
         { id: 'a', label: 'A', text: 'Canada' },
         { id: 'b', label: 'B', text: 'Australia' },
@@ -126,6 +118,18 @@ const QUESTIONS: Record<string, Question[]> = {
       ],
     },
   ],
+}
+
+const ANSWER_KEY: Record<string, string> = {
+  'science-1': 'd',
+  'science-2': 'b',
+  'science-3': 'c',
+  'cinema-1': 'a',
+  'cinema-2': 'e',
+  'cinema-3': 'd',
+  'world-1': 'b',
+  'world-2': 'c',
+  'world-3': 'a',
 }
 
 const TOPIC_TO_KEY: Record<string, keyof typeof QUESTIONS> = {
@@ -139,21 +143,21 @@ const OPEN_GAMES_SEED: LobbyGame[] = [
     id: 'game-101',
     hostName: 'Mira',
     topic: 'Science',
-    questionCount: 3,
+    questionCount: 10,
     createdAt: new Date(Date.now() - 7 * 60_000).toISOString(),
   },
   {
     id: 'game-102',
     hostName: 'Jonah',
     topic: 'Cinema',
-    questionCount: 3,
+    questionCount: 12,
     createdAt: new Date(Date.now() - 12 * 60_000).toISOString(),
   },
   {
     id: 'game-103',
     hostName: 'Sana',
     topic: 'World',
-    questionCount: 3,
+    questionCount: 15,
     createdAt: new Date(Date.now() - 19 * 60_000).toISOString(),
   },
 ]
@@ -165,12 +169,33 @@ type PendingTimers = {
   opponentNext?: number
 }
 
-export function createMockSession(playerName: string) {
+export function createMockTransport(): BackendTransport {
+  const listeners = new Set<(event: BackendEvent) => void>()
+  let playerName = ''
+  let authMode: AuthMode = 'guest'
+  let selfPlayerId = 'player_1'
   let lobbyGames = [...OPEN_GAMES_SEED]
   let session: GameSession | null = null
+  let questionDeck: Question[] = []
+  let localSelectedAnswerId: string | null = null
   let pending: PendingTimers = {}
 
-  const getLobbyGames = () => [...lobbyGames].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const emit = (event: BackendEvent) => {
+    for (const listener of listeners) {
+      listener(event)
+    }
+  }
+
+  const emitSession = () => {
+    emit({ type: 'session.sync', session })
+  }
+
+  const emitLobby = () => {
+    emit({
+      type: 'lobby.snapshot',
+      games: [...lobbyGames].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    })
+  }
 
   const resetPending = () => {
     for (const timer of Object.values(pending)) {
@@ -181,26 +206,51 @@ export function createMockSession(playerName: string) {
     pending = {}
   }
 
-  const currentPlayers = (): [Player, Player] => {
-    if (!session) {
-      throw new Error('No active session')
+  const normalizePlayers = (players: Player[]): [Player, Player] => {
+    if (players.length >= 2) {
+      return [players[0], players[1]]
     }
-    return session.players
+    return [
+      players[0],
+      {
+        id: 'player_2',
+        name: 'Waiting for player two',
+        score: 0,
+        isReadyForNext: false,
+        hasLockedAnswer: false,
+      },
+    ]
+  }
+
+  const getCurrentQuestion = () => questionDeck[session?.questionIndex ?? 0] ?? null
+
+  const buildQuestionDeck = (topic: string, questionCount: number) => {
+    const source = QUESTIONS[TOPIC_TO_KEY[topic]]
+    return Array.from({ length: questionCount }, (_, index) => {
+      const template = source[index % source.length]
+      return {
+        ...template,
+        id: `${template.id}-${index + 1}`,
+      }
+    })
   }
 
   const buildSession = (game: LobbyGame, youAreHost: boolean): GameSession => {
-    const localPlayer: Player = {
-      id: 'you',
-      name: playerName,
+    const host: Player = {
+      id: 'player_1',
+      name: youAreHost ? playerName : game.hostName,
       score: 0,
       isReadyForNext: false,
+      hasLockedAnswer: false,
     }
-    const remotePlayer: Player = {
-      id: 'opponent',
-      name: youAreHost ? 'Waiting...' : game.hostName,
+    const guest: Player = {
+      id: 'player_2',
+      name: youAreHost ? 'Waiting for player two' : playerName,
       score: 0,
       isReadyForNext: false,
+      hasLockedAnswer: false,
     }
+    selfPlayerId = youAreHost ? 'player_1' : 'player_2'
 
     return {
       id: game.id,
@@ -208,55 +258,62 @@ export function createMockSession(playerName: string) {
       totalQuestions: game.questionCount,
       questionIndex: 0,
       phase: youAreHost ? 'waiting_for_player' : 'question_active',
-      players: youAreHost ? [localPlayer, remotePlayer] : [remotePlayer, localPlayer],
+      players: [host, guest],
       currentQuestion: null,
-      selectedAnswerId: null,
+      correctAnswerId: null,
       questionEndsAt: null,
       resultMessage: null,
       winnerLabel: null,
     }
   }
 
-  const getQuestionSet = (topic: string) => {
-    const key = TOPIC_TO_KEY[topic]
-    return QUESTIONS[key]
-  }
-
   const startQuestion = () => {
     if (!session) {
       return
     }
-    const question = getQuestionSet(session.topic)[session.questionIndex]
-    const players = currentPlayers().map((player) => ({
-      ...player,
-      isReadyForNext: false,
-      didAnswerCorrectly: undefined,
-    })) as [Player, Player]
+    localSelectedAnswerId = null
+    emit({ type: 'local.answer.selected', answerId: null })
 
     session = {
       ...session,
       phase: 'question_active',
-      currentQuestion: question,
-      selectedAnswerId: null,
+      currentQuestion: getCurrentQuestion(),
+      correctAnswerId: null,
       questionEndsAt: new Date(Date.now() + QUESTION_TIME_MS).toISOString(),
       resultMessage: null,
-      players,
+      players: normalizePlayers(
+        session.players.map((player) => ({
+          ...player,
+          isReadyForNext: false,
+          hasLockedAnswer: false,
+          didAnswerCorrectly: undefined,
+        })),
+      ),
     }
 
+    emitSession()
     scheduleOpponentAnswer()
     scheduleReveal()
   }
+
+  const localPlayerIndex = () => (session?.players[0].id === selfPlayerId ? 0 : 1)
+  const opponentPlayerIndex = () => (localPlayerIndex() === 0 ? 1 : 0)
 
   const scheduleSecondPlayerJoin = () => {
     pending.secondPlayerJoin = window.setTimeout(() => {
       if (!session || session.phase !== 'waiting_for_player') {
         return
       }
-      const [local, remote] = session.players
+      const players = [...session.players] as [Player, Player]
+      players[1] = {
+        ...players[1],
+        name: 'Player Two',
+      }
       session = {
         ...session,
-        players: [local, { ...remote, name: 'Player Two' }],
+        players,
       }
+      emitSession()
       startQuestion()
     }, 2_200)
   }
@@ -271,31 +328,31 @@ export function createMockSession(playerName: string) {
       if (!session || session.phase !== 'question_active') {
         return
       }
-      const [p1] = currentPlayers()
-      const opponentIndex = p1.id === 'you' ? 1 : 0
-      const players = [...currentPlayers()] as [Player, Player]
-      const correctId = currentQuestion.correctOptionId
+      const players = [...session.players] as [Player, Player]
+      const opponentIndex = opponentPlayerIndex()
+      const correctId = ANSWER_KEY[currentQuestion.id.split('-').slice(0, 2).join('-')]
       const optionIds = currentQuestion.options.map((option) => option.id)
       const answeredCorrectly = Math.random() > 0.5
       const chosen = answeredCorrectly
         ? correctId
         : optionIds.find((id) => id !== correctId) ?? correctId
-      const opponent = players[opponentIndex]
       players[opponentIndex] = {
-        ...opponent,
+        ...players[opponentIndex],
+        hasLockedAnswer: true,
         didAnswerCorrectly: chosen === correctId,
       }
       session = {
         ...session,
         players,
       }
+      emitSession()
       maybeRevealEarly()
     }, delay)
   }
 
   const scheduleReveal = () => {
     pending.reveal = window.setTimeout(() => {
-      revealQuestion()
+      revealQuestion('time_expired')
     }, QUESTION_TIME_MS)
   }
 
@@ -303,56 +360,57 @@ export function createMockSession(playerName: string) {
     if (!session || session.phase !== 'question_active') {
       return
     }
-    const [p1, p2] = currentPlayers()
-    const localAnswered = session.selectedAnswerId !== null
-    const remoteAnswered =
-      (p1.id === 'opponent' ? p1.didAnswerCorrectly : p2.didAnswerCorrectly) !== undefined
-
-    if (localAnswered && remoteAnswered) {
-      if (pending.reveal) {
-        window.clearTimeout(pending.reveal)
-      }
-      pending.reveal = window.setTimeout(() => {
-        revealQuestion()
-      }, 700)
+    const everyoneLocked = session.players.every((player) => player.hasLockedAnswer)
+    if (!everyoneLocked) {
+      return
     }
+    if (pending.reveal) {
+      window.clearTimeout(pending.reveal)
+    }
+    pending.reveal = window.setTimeout(() => {
+      revealQuestion('both_answered')
+    }, 700)
   }
 
-  const revealQuestion = () => {
+  const revealQuestion = (reason: 'both_answered' | 'time_expired') => {
     if (!session || !session.currentQuestion) {
       return
     }
-    const correctId = session.currentQuestion.correctOptionId
-    const players = currentPlayers().map((player) => ({ ...player })) as [Player, Player]
-    const localIndex = players[0].id === 'you' ? 0 : 1
-    const localPlayer = players[localIndex]
-    const localCorrect = session.selectedAnswerId === correctId
+    const correctAnswerId = ANSWER_KEY[session.currentQuestion.id.split('-').slice(0, 2).join('-')]
+    const players = session.players.map((player) => ({ ...player })) as [Player, Player]
+    const localIndex = localPlayerIndex()
+    const localCorrect = localSelectedAnswerId === correctAnswerId
+
     players[localIndex] = {
-      ...localPlayer,
-      score: localPlayer.score + (localCorrect ? 1 : 0),
+      ...players[localIndex],
+      score: players[localIndex].score + (localCorrect ? 1 : 0),
+      hasLockedAnswer: true,
       didAnswerCorrectly: localCorrect,
     }
 
-    const remoteIndex = localIndex === 0 ? 1 : 0
-    const remotePlayer = players[remoteIndex]
+    const remoteIndex = opponentPlayerIndex()
     players[remoteIndex] = {
-      ...remotePlayer,
-      score:
-        remotePlayer.score + (remotePlayer.didAnswerCorrectly ? 1 : 0),
+      ...players[remoteIndex],
+      score: players[remoteIndex].score + (players[remoteIndex].didAnswerCorrectly ? 1 : 0),
+      hasLockedAnswer: true,
     }
+
+    const resultMessage =
+      reason === 'time_expired' && localSelectedAnswerId === null
+        ? 'Time ran out. Your answer counted as no answer.'
+        : localCorrect
+          ? 'Locked in and correct.'
+          : 'Locked in, but not correct this round.'
 
     session = {
       ...session,
       players,
       phase: 'answer_reveal',
+      correctAnswerId,
       questionEndsAt: null,
-      resultMessage:
-        session.selectedAnswerId === null
-          ? 'Time ran out. Your answer counted as no answer.'
-          : localCorrect
-            ? 'Locked in and correct.'
-            : 'Locked in, but not correct this round.',
+      resultMessage,
     }
+    emitSession()
   }
 
   const scheduleOpponentNext = () => {
@@ -360,37 +418,36 @@ export function createMockSession(playerName: string) {
       if (!session || session.phase !== 'waiting_for_next') {
         return
       }
-      const players = currentPlayers().map((player) => ({ ...player })) as [Player, Player]
-      const opponentIndex = players[0].id === 'opponent' ? 0 : 1
-      players[opponentIndex].isReadyForNext = true
+      const players = [...session.players] as [Player, Player]
+      players[opponentPlayerIndex()] = {
+        ...players[opponentPlayerIndex()],
+        isReadyForNext: true,
+      }
       session = { ...session, players }
+      emitSession()
       advanceIfReady()
     }, 1_500)
   }
 
   const advanceIfReady = () => {
-    if (!session) {
-      return
-    }
-    const ready = session.players.every((player) => player.isReadyForNext)
-    if (!ready) {
+    if (!session || !session.players.every((player) => player.isReadyForNext)) {
       return
     }
     const nextIndex = session.questionIndex + 1
     if (nextIndex >= session.totalQuestions) {
       const [first, second] = session.players
-      const winnerLabel =
-        first.score === second.score
-          ? 'Draw game'
-          : first.score > second.score
-            ? `${first.name} wins`
-            : `${second.name} wins`
       session = {
         ...session,
         phase: 'results',
         questionIndex: nextIndex,
-        winnerLabel,
+        winnerLabel:
+          first.score === second.score
+            ? 'Draw game'
+            : first.score > second.score
+              ? `${first.name} wins`
+              : `${second.name} wins`,
       }
+      emitSession()
       return
     }
     session = {
@@ -401,62 +458,110 @@ export function createMockSession(playerName: string) {
   }
 
   return {
-    getLobbyGames,
-    getSession: () => session,
-    createGame(topic: string, questionCount: number) {
+    connect() {
+      emit({ type: 'connection.status', status: 'connecting' })
+      window.setTimeout(() => {
+        emit({ type: 'connection.status', status: 'connected' })
+      }, 150)
+    },
+    disconnect() {
       resetPending()
-      const lobbyGame: LobbyGame = {
+      emit({ type: 'connection.status', status: 'disconnected' })
+    },
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+    enterGuest(displayName) {
+      playerName = displayName
+      authMode = 'guest'
+      emit({
+        type: 'auth.ready',
+        playerId: selfPlayerId,
+        authMode,
+      })
+    },
+    startOidc() {
+      emit({
+        type: 'error',
+        message: 'OIDC will be added later. Guest mode stays available in v1.',
+      })
+    },
+    subscribeLobby() {
+      emitLobby()
+    },
+    createGame(topic, questionCount) {
+      resetPending()
+      const game: LobbyGame = {
         id: `game-${Math.round(Math.random() * 10_000)}`,
         hostName: playerName,
         topic,
         questionCount,
         createdAt: new Date().toISOString(),
       }
-      session = buildSession(lobbyGame, true)
+      questionDeck = buildQuestionDeck(topic, questionCount)
+      session = buildSession(game, true)
+      emitSession()
       scheduleSecondPlayerJoin()
-      return session
     },
-    joinGame(gameId: string) {
+    joinGame(gameId) {
       resetPending()
       const game = lobbyGames.find((entry) => entry.id === gameId)
       if (!game) {
-        throw new Error('That game is no longer available.')
+        emit({
+          type: 'error',
+          message: 'That game is no longer available.',
+        })
+        emitLobby()
+        return
       }
       lobbyGames = lobbyGames.filter((entry) => entry.id !== gameId)
+      questionDeck = buildQuestionDeck(game.topic, game.questionCount)
       session = buildSession(game, false)
       startQuestion()
-      return session
     },
-    submitAnswer(answerId: string) {
-      if (!session || session.phase !== 'question_active' || session.selectedAnswerId) {
-        return session
+    submitAnswer(_gameId, _questionId, answerId) {
+      if (!session || session.phase !== 'question_active' || localSelectedAnswerId !== null) {
+        return
       }
-      session = {
-        ...session,
-        selectedAnswerId: answerId,
+      localSelectedAnswerId = answerId
+      emit({ type: 'local.answer.selected', answerId })
+      const players = [...session.players] as [Player, Player]
+      players[localPlayerIndex()] = {
+        ...players[localPlayerIndex()],
+        hasLockedAnswer: true,
       }
+      session = { ...session, players }
+      emitSession()
       maybeRevealEarly()
-      return session
     },
     readyForNext() {
       if (!session || session.phase !== 'answer_reveal') {
-        return session
+        return
       }
-      const players = currentPlayers().map((player) => ({ ...player })) as [Player, Player]
-      const localIndex = players[0].id === 'you' ? 0 : 1
-      players[localIndex].isReadyForNext = true
+      const players = [...session.players] as [Player, Player]
+      players[localPlayerIndex()] = {
+        ...players[localPlayerIndex()],
+        isReadyForNext: true,
+      }
       session = {
         ...session,
         players,
         phase: 'waiting_for_next',
       }
+      emitSession()
       scheduleOpponentNext()
       advanceIfReady()
-      return session
     },
-    backToLobby() {
+    returnToLobby() {
       resetPending()
       session = null
+      localSelectedAnswerId = null
+      emit({ type: 'local.answer.selected', answerId: null })
+      emitSession()
+      emitLobby()
     },
   }
 }

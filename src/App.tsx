@@ -3,26 +3,37 @@ import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { useMachine } from '@xstate/react'
 import { assign, setup } from 'xstate'
 import './App.css'
-import { createMockSession } from './mockServer'
-import type { AppScreen, AuthMode, GameSession, LobbyGame } from './types'
+import { createBackendTransport } from './backend'
+import type { BackendEvent } from './backend/transport'
+import type {
+  AppScreen,
+  AuthMode,
+  ConnectionStatus,
+  GameSession,
+  LobbyGame,
+} from './types'
 
 type AppContext = {
   authMode: AuthMode | null
   playerName: string
+  playerId: string | null
   screen: AppScreen
   lobbyGames: LobbyGame[]
   session: GameSession | null
+  selectedAnswerId: string | null
+  connectionStatus: ConnectionStatus
   error: string | null
 }
 
 type AppEvent =
   | { type: 'ENTER_GUEST'; playerName: string }
+  | { type: 'AUTH_READY'; playerId: string; authMode: AuthMode }
   | { type: 'CHOOSE_OIDC' }
   | { type: 'LOAD_LOBBY'; lobbyGames: LobbyGame[] }
-  | { type: 'CREATE_GAME'; session: GameSession }
-  | { type: 'JOIN_GAME'; session: GameSession }
   | { type: 'SYNC_SESSION'; session: GameSession | null }
-  | { type: 'RETURN_TO_LOBBY'; lobbyGames: LobbyGame[] }
+  | { type: 'SET_SELECTED_ANSWER'; answerId: string | null }
+  | { type: 'SET_CONNECTION_STATUS'; status: ConnectionStatus }
+  | { type: 'RETURN_TO_LOBBY' }
   | { type: 'SET_ERROR'; message: string | null }
 
 const appMachine = setup({
@@ -32,20 +43,22 @@ const appMachine = setup({
   },
 }).createMachine({
   id: 'webquiz-app',
-  initial: 'landing',
+  initial: 'active',
   context: {
     authMode: null,
     playerName: '',
+    playerId: null,
     screen: 'landing',
     lobbyGames: [],
     session: null,
+    selectedAnswerId: null,
+    connectionStatus: 'connecting',
     error: null,
   },
   states: {
-    landing: {
+    active: {
       on: {
         ENTER_GUEST: {
-          target: 'lobby',
           actions: assign(({ event }) => ({
             authMode: 'guest',
             playerName: event.playerName,
@@ -53,58 +66,56 @@ const appMachine = setup({
             error: null,
           })),
         },
+        AUTH_READY: {
+          actions: assign(({ event }) => ({
+            playerId: event.playerId,
+            authMode: event.authMode,
+          })),
+        },
         CHOOSE_OIDC: {
           actions: assign({
             authMode: 'oidc',
-            error: 'OIDC will be added later. Guest mode stays available in v1.',
+            error: null,
           }),
         },
-      },
-    },
-    lobby: {
-      on: {
         LOAD_LOBBY: {
           actions: assign(({ event }) => ({
             lobbyGames: event.lobbyGames,
             screen: 'lobby',
           })),
         },
-        CREATE_GAME: {
-          target: 'game',
-          actions: assign(({ event }) => ({
-            session: event.session,
-            screen: 'game',
-            error: null,
-          })),
-        },
-        JOIN_GAME: {
-          target: 'game',
-          actions: assign(({ event }) => ({
-            session: event.session,
-            screen: 'game',
-            error: null,
-          })),
-        },
-        SET_ERROR: {
-          actions: assign(({ event }) => ({ error: event.message })),
-        },
-      },
-    },
-    game: {
-      on: {
         SYNC_SESSION: {
+          actions: assign(({ event, context }) => {
+            const nextSession = event.session
+            return {
+              session: nextSession,
+              screen: nextSession ? 'game' : context.screen === 'game' ? 'lobby' : context.screen,
+              selectedAnswerId:
+                nextSession?.phase === 'question_active'
+                  ? context.selectedAnswerId
+                  : nextSession?.phase === 'answer_reveal'
+                    ? context.selectedAnswerId
+                    : null,
+            }
+          }),
+        },
+        SET_SELECTED_ANSWER: {
           actions: assign(({ event }) => ({
-            session: event.session,
+            selectedAnswerId: event.answerId,
+          })),
+        },
+        SET_CONNECTION_STATUS: {
+          actions: assign(({ event }) => ({
+            connectionStatus: event.status,
           })),
         },
         RETURN_TO_LOBBY: {
-          target: 'lobby',
-          actions: assign(({ event }) => ({
-            session: null,
-            lobbyGames: event.lobbyGames,
+          actions: assign({
             screen: 'lobby',
+            session: null,
+            selectedAnswerId: null,
             error: null,
-          })),
+          }),
         },
         SET_ERROR: {
           actions: assign(({ event }) => ({ error: event.message })),
@@ -125,38 +136,62 @@ function App() {
   const [newGameQuestionCount, setNewGameQuestionCount] = useState(10)
   const [now, setNow] = useState(() => Date.now())
 
-  const transport = useMemo(() => {
-    if (!state.context.playerName) {
-      return null
-    }
-    return createMockSession(state.context.playerName)
-  }, [state.context.playerName])
+  const transport = useMemo(() => createBackendTransport(), [])
 
   useEffect(() => {
-    const nextPath = state.context.screen === 'game' ? `/game/${state.context.session?.id ?? ''}` : state.context.screen === 'lobby' ? '/lobby' : '/'
+    const unsubscribe = transport.subscribe((event: BackendEvent) => {
+      switch (event.type) {
+        case 'connection.status':
+          send({ type: 'SET_CONNECTION_STATUS', status: event.status })
+          break
+        case 'auth.ready':
+          send({
+            type: 'AUTH_READY',
+            playerId: event.playerId,
+            authMode: event.authMode,
+          })
+          break
+        case 'lobby.snapshot':
+          send({ type: 'LOAD_LOBBY', lobbyGames: event.games })
+          break
+        case 'session.sync':
+          send({ type: 'SYNC_SESSION', session: event.session })
+          break
+        case 'local.answer.selected':
+          send({ type: 'SET_SELECTED_ANSWER', answerId: event.answerId })
+          break
+        case 'error':
+          send({ type: 'SET_ERROR', message: event.message })
+      }
+    })
+
+    transport.connect()
+
+    return () => {
+      unsubscribe()
+      transport.disconnect()
+    }
+  }, [send, transport])
+
+  useEffect(() => {
+    const nextPath =
+      state.context.screen === 'game'
+        ? `/game/${state.context.session?.id ?? ''}`
+        : state.context.screen === 'lobby'
+          ? '/lobby'
+          : '/'
     navigate(nextPath, { replace: true })
   }, [navigate, state.context.screen, state.context.session?.id])
-
-  useEffect(() => {
-    if (!transport) {
-      return
-    }
-    send({ type: 'LOAD_LOBBY', lobbyGames: transport.getLobbyGames() })
-  }, [send, transport])
 
   useEffect(() => {
     if (!state.context.session || state.context.session.phase === 'results') {
       return
     }
     const timer = window.setInterval(() => {
-      const session = transport?.getSession()
-      if (session) {
-        send({ type: 'SYNC_SESSION', session })
-      }
       setNow(Date.now())
     }, 250)
     return () => window.clearInterval(timer)
-  }, [send, state.context.session, transport])
+  }, [state.context.session])
 
   const countdown = useMemo(() => {
     const endsAt = state.context.session?.questionEndsAt
@@ -166,53 +201,53 @@ function App() {
     return Math.max(0, Math.ceil((new Date(endsAt).getTime() - now) / 1000))
   }, [now, state.context.session?.questionEndsAt])
 
-  const createGame = () => {
-    if (!transport) {
+  const enterLobbyAsGuest = () => {
+    const trimmed = guestName.trim()
+    if (!trimmed) {
+      send({ type: 'SET_ERROR', message: 'Enter a name to continue as guest.' })
       return
     }
-    const session = transport.createGame(newGameTopic, newGameQuestionCount)
-    send({ type: 'CREATE_GAME', session })
+    send({ type: 'ENTER_GUEST', playerName: trimmed })
+    transport.enterGuest(trimmed)
+    transport.subscribeLobby()
+  }
+
+  const createGame = () => {
+    transport.createGame(newGameTopic, newGameQuestionCount)
   }
 
   const joinGame = (gameId: string) => {
-    if (!transport) {
-      return
-    }
-    try {
-      const session = transport.joinGame(gameId)
-      send({ type: 'JOIN_GAME', session })
-    } catch (error) {
-      send({
-        type: 'SET_ERROR',
-        message: error instanceof Error ? error.message : 'Unable to join game.',
-      })
-      send({ type: 'LOAD_LOBBY', lobbyGames: transport.getLobbyGames() })
-    }
+    transport.joinGame(gameId)
   }
 
   const submitAnswer = (answerId: string) => {
-    const session = transport?.submitAnswer(answerId)
-    if (session) {
-      send({ type: 'SYNC_SESSION', session })
+    const session = state.context.session
+    if (!session?.currentQuestion) {
+      return
     }
+    transport.submitAnswer(session.id, session.currentQuestion.id, answerId)
   }
 
   const readyForNext = () => {
-    const session = transport?.readyForNext()
-    if (session) {
-      send({ type: 'SYNC_SESSION', session })
+    const session = state.context.session
+    if (!session?.currentQuestion) {
+      return
     }
+    transport.readyForNext(session.id, session.currentQuestion.id)
   }
 
   const backToLobby = () => {
-    transport?.backToLobby()
-    if (transport) {
-      send({ type: 'RETURN_TO_LOBBY', lobbyGames: transport.getLobbyGames() })
+    const gameId = state.context.session?.id
+    send({ type: 'RETURN_TO_LOBBY' })
+    if (gameId) {
+      transport.returnToLobby(gameId)
     }
+    transport.subscribeLobby()
   }
 
   return (
     <div className="app-shell">
+      <ConnectionBanner status={state.context.connectionStatus} />
       <Routes>
         <Route
           path="/"
@@ -221,15 +256,11 @@ function App() {
               guestName={guestName}
               error={state.context.error}
               onGuestNameChange={setGuestName}
-              onContinueAsGuest={() => {
-                const trimmed = guestName.trim()
-                if (!trimmed) {
-                  send({ type: 'SET_ERROR', message: 'Enter a name to continue as guest.' })
-                  return
-                }
-                send({ type: 'ENTER_GUEST', playerName: trimmed })
+              onContinueAsGuest={enterLobbyAsGuest}
+              onOidcClick={() => {
+                send({ type: 'CHOOSE_OIDC' })
+                transport.startOidc()
               }}
-              onOidcClick={() => send({ type: 'CHOOSE_OIDC' })}
             />
           }
         />
@@ -259,6 +290,8 @@ function App() {
             state.context.session ? (
               <GameScreen
                 countdown={countdown}
+                playerId={state.context.playerId}
+                selectedAnswerId={state.context.selectedAnswerId}
                 session={state.context.session}
                 onAnswerSelect={submitAnswer}
                 onBackToLobby={backToLobby}
@@ -272,6 +305,17 @@ function App() {
       </Routes>
     </div>
   )
+}
+
+function ConnectionBanner(props: { status: ConnectionStatus }) {
+  const label =
+    props.status === 'connected'
+      ? 'Connected'
+      : props.status === 'connecting'
+        ? 'Connecting'
+        : 'Disconnected'
+
+  return <div className={`connection-banner is-${props.status}`}>{label}</div>
 }
 
 type LandingScreenProps = {
@@ -449,6 +493,8 @@ function LobbyScreen(props: LobbyScreenProps) {
 
 type GameScreenProps = {
   countdown: number
+  playerId: string | null
+  selectedAnswerId: string | null
   session: GameSession
   onAnswerSelect: (answerId: string) => void
   onReadyForNext: () => void
@@ -456,16 +502,21 @@ type GameScreenProps = {
 }
 
 function GameScreen(props: GameScreenProps) {
-  const localPlayer = props.session.players.find((player) => player.id === 'you')!
-  const opponent = props.session.players.find((player) => player.id === 'opponent')!
+  const localPlayer =
+    props.session.players.find((player) => player.id === props.playerId) ?? props.session.players[0]
+  const opponent =
+    props.session.players.find((player) => player.id !== localPlayer.id) ?? props.session.players[1]
   const questionNumber = Math.min(props.session.questionIndex + 1, props.session.totalQuestions)
 
   return (
     <main className="screen game-screen">
       <header className="scoreboard">
         {props.session.players.map((player) => (
-          <article key={player.id} className={`score-card ${player.id === 'you' ? 'is-local' : ''}`}>
-            <span>{player.id === 'you' ? 'You' : 'Opponent'}</span>
+          <article
+            key={player.id}
+            className={`score-card ${player.id === localPlayer.id ? 'is-local' : ''}`}
+          >
+            <span>{player.id === localPlayer.id ? 'You' : 'Opponent'}</span>
             <strong>{player.name}</strong>
             <em>{player.score} pts</em>
           </article>
@@ -477,8 +528,8 @@ function GameScreen(props: GameScreenProps) {
           <p className="eyebrow">Waiting room</p>
           <h1>Your game is live on the lobby list.</h1>
           <p className="support-copy">
-            The backend will keep this game open until a second player joins. In the mock
-            flow, another player joins automatically after a short delay.
+            The backend keeps this room available until the second player joins. Once that
+            happens, the server starts the first question.
           </p>
           <div className="waiting-grid">
             <div>
@@ -513,13 +564,13 @@ function GameScreen(props: GameScreenProps) {
           </div>
           <div className="status-strip">
             <span>{props.session.currentQuestion.topic}</span>
-            <span>{localPlayer.name}: {props.session.selectedAnswerId ? 'answer locked' : 'choosing'}</span>
-            <span>{opponent.name}: {opponent.didAnswerCorrectly === undefined ? 'choosing' : 'answer locked'}</span>
+            <span>{localPlayer.name}: {localPlayer.hasLockedAnswer ? 'answer locked' : 'choosing'}</span>
+            <span>{opponent.name}: {opponent.hasLockedAnswer ? 'answer locked' : 'choosing'}</span>
           </div>
           <div className="answers-grid">
             {props.session.currentQuestion.options.map((option) => {
-              const isSelected = props.session.selectedAnswerId === option.id
-              const isDisabled = props.session.selectedAnswerId !== null
+              const isSelected = props.selectedAnswerId === option.id
+              const isDisabled = props.selectedAnswerId !== null
               return (
                 <button
                   key={option.id}
@@ -546,7 +597,7 @@ function GameScreen(props: GameScreenProps) {
             <strong>
               {
                 props.session.currentQuestion.options.find(
-                  (option) => option.id === props.session.currentQuestion?.correctOptionId,
+                  (option) => option.id === props.session.correctAnswerId,
                 )?.text
               }
             </strong>
@@ -590,7 +641,7 @@ function GameScreen(props: GameScreenProps) {
           <div className="result-grid">
             {props.session.players.map((player) => (
               <article key={player.id} className="result-card neutral">
-                <span>{player.id === 'you' ? 'You' : player.name}</span>
+                <span>{player.id === localPlayer.id ? 'You' : player.name}</span>
                 <strong>{player.score} points</strong>
               </article>
             ))}
