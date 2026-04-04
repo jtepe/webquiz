@@ -81,11 +81,7 @@ export function createWebSocketTransport(url: string): BackendTransport {
         emit({
           type: 'auth.ready',
           playerId: message.payload.playerId,
-          authMode: message.payload.authMode,
         })
-        return
-      case 'auth.oidc.pending':
-        emit({ type: 'error', message: message.payload.message })
         return
       case 'lobby.snapshot':
         emit({ type: 'lobby.snapshot', games: message.payload.games })
@@ -261,18 +257,11 @@ export function createWebSocketTransport(url: string): BackendTransport {
         listeners.delete(listener)
       }
     },
-    enterGuest(displayName) {
+    identifyPlayer(displayName) {
       sendMessage({
-        type: 'auth.guest.enter',
+        type: 'player.identify',
         requestId: nextRequestId(),
         payload: { displayName },
-      })
-    },
-    startOidc() {
-      sendMessage({
-        type: 'auth.oidc.start',
-        requestId: nextRequestId(),
-        payload: {},
       })
     },
     subscribeLobby() {

@@ -1,4 +1,4 @@
-import type { AuthMode, ConnectionStatus, GameSession, LobbyGame } from '../types'
+import type { ConnectionStatus, GameSession, LobbyGame } from '../types'
 
 export type BackendEvent =
   | {
@@ -8,7 +8,6 @@ export type BackendEvent =
   | {
       type: 'auth.ready'
       playerId: string
-      authMode: AuthMode
     }
   | {
       type: 'lobby.snapshot'
@@ -31,8 +30,7 @@ export type BackendTransport = {
   connect: () => void
   disconnect: () => void
   subscribe: (listener: (event: BackendEvent) => void) => () => void
-  enterGuest: (displayName: string) => void
-  startOidc: () => void
+  identifyPlayer: (displayName: string) => void
   subscribeLobby: () => void
   createGame: (topic: string, questionCount: number) => void
   joinGame: (gameId: string) => void

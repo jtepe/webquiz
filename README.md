@@ -73,6 +73,12 @@ Environment switches:
 VITE_WS_URL=ws://localhost:8080 bun run dev
 ```
 
+OIDC configuration:
+
+```bash
+VITE_IDP_URL=https://idp.example.com VITE_WS_URL=ws://localhost:8080 bun run dev
+```
+
 Use the mock backend explicitly:
 
 ```bash
@@ -136,6 +142,6 @@ The expected WebSocket message contract and game/lobby state machine are documen
 
 ## Notes
 
-- OIDC is intentionally not implemented yet. The entry point exists so it can be added later without redesigning the landing flow.
+- OIDC is handled by the frontend over HTTP, not by the WebSocket backend. The frontend calls `${IDP_URL}/me`, redirects to `${IDP_URL}/login?redirect={MY_HOST}` on `401`, and retries `/me` after returning.
 - Reconnect handling is out of scope for the current version.
 - Duplicate guest names are currently allowed.
