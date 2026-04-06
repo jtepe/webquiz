@@ -12,11 +12,11 @@ function getIdpUrl() {
 }
 
 function getRedirectTarget() {
-  return window.location.origin
+  return window.location.href
 }
 
-function getLoginUrl(idpUrl: string) {
-  const redirect = encodeURIComponent(getRedirectTarget())
+export function getOidcLoginUrl(idpUrl: string, redirectTarget = getRedirectTarget()) {
+  const redirect = encodeURIComponent(redirectTarget)
   return `${idpUrl}/login?redirect=${redirect}`
 }
 
@@ -36,7 +36,7 @@ export async function beginOrResumeOidcLogin() {
 
   if (response.status === 401) {
     window.localStorage.setItem(PENDING_OIDC_KEY, '1')
-    window.location.assign(getLoginUrl(idpUrl))
+    window.location.assign(getOidcLoginUrl(idpUrl))
     return null
   }
 
