@@ -185,6 +185,13 @@ export function createMockTransport(): BackendTransport {
     }
   }
 
+  const emitAuthReady = () => {
+    emit({
+      type: 'auth.ready',
+      playerId: selfPlayerId,
+    })
+  }
+
   const emitSession = () => {
     emit({ type: 'session.sync', session })
   }
@@ -475,10 +482,7 @@ export function createMockTransport(): BackendTransport {
     },
     identifyPlayer(displayName) {
       playerName = displayName
-      emit({
-        type: 'auth.ready',
-        playerId: selfPlayerId,
-      })
+      emitAuthReady()
     },
     subscribeLobby() {
       emitLobby()
@@ -494,6 +498,7 @@ export function createMockTransport(): BackendTransport {
       }
       questionDeck = buildQuestionDeck(topic, questionCount)
       session = buildSession(game, true)
+      emitAuthReady()
       emitSession()
       scheduleSecondPlayerJoin()
     },
@@ -511,6 +516,7 @@ export function createMockTransport(): BackendTransport {
       lobbyGames = lobbyGames.filter((entry) => entry.id !== gameId)
       questionDeck = buildQuestionDeck(game.topic, game.questionCount)
       session = buildSession(game, false)
+      emitAuthReady()
       startQuestion()
     },
     submitAnswer(_gameId, _questionId, answerId) {
