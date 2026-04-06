@@ -74,6 +74,21 @@ export function createWebSocketTransport(url: string): BackendTransport {
     winnerLabel: null,
   })
 
+  const resolveSelfPlayerId = (
+    messageType: 'game.created' | 'game.joined',
+    payload: GameSnapshotPayload,
+  ) => {
+    const players = payload.game.players
+    if (players.length === 0) {
+      return
+    }
+
+    selfPlayerId =
+      messageType === 'game.created'
+        ? players[0]?.id ?? null
+        : players[1]?.id ?? players[players.length - 1]?.id ?? null
+  }
+
   const applyMessage = (message: ServerMessage) => {
     switch (message.type) {
       case 'session.ready':
@@ -88,6 +103,13 @@ export function createWebSocketTransport(url: string): BackendTransport {
         return
       case 'game.created':
       case 'game.joined':
+        resolveSelfPlayerId(message.type, message.payload)
+        if (selfPlayerId) {
+          emit({
+            type: 'auth.ready',
+            playerId: selfPlayerId,
+          })
+        }
         session = mapSnapshot(message.payload)
         emit({ type: 'local.answer.selected', answerId: null })
         emit({ type: 'session.sync', session })
