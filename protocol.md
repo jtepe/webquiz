@@ -131,6 +131,7 @@ Sent immediately after the socket opens.
   "type": "session.hello",
   "requestId": "req_1",
   "payload": {
+    "protocolVersion": 1,
     "clientVersion": "webquiz-frontend",
     "resumeToken": null
   }
@@ -139,6 +140,7 @@ Sent immediately after the socket opens.
 
 Notes:
 
+- `protocolVersion` is required and currently must be `1`.
 - `resumeToken` is optional for future reconnect support.
 - Reconnect behavior is out of scope for v1, but the field keeps the protocol extensible.
 
