@@ -11,7 +11,8 @@ class FakeWebSocket {
   sentMessages: string[] = []
   private listeners = new Map<string, Set<(event?: MessageEvent) => void>>()
 
-  constructor(_url: string) {
+  constructor(url: string) {
+    void url
     FakeWebSocket.instances.push(this)
   }
 

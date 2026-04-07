@@ -103,6 +103,18 @@ Run tests:
 bun run test
 ```
 
+Run the scripted WebSocket protocol exercise:
+
+```bash
+bun run ws:protocol -- --url ws://localhost:8080
+```
+
+Useful flags:
+
+```bash
+bun run ws:protocol -- --trace-json --host-name Mira --joiner-name Jonah --topic Science
+```
+
 ## Mocked Backend Behavior
 
 Until the real backend exists, the frontend uses a mocked session layer that simulates:
