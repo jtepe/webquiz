@@ -1,33 +1,28 @@
 # WebQuiz Frontend
 
-Browser frontend for a two-player quiz game that is intended to run against a WebSocket backend.
+Browser frontend for a two-player quiz game.
 
-This repository currently focuses on the client only. Server-side room management, question delivery, scores, and authoritative game state are assumed to exist behind a backend contract and are mocked locally for now.
+This repository contains the client application, a mock transport for local development, a WebSocket transport for a real backend, and the protocol document plus a runner script used to exercise that backend contract.
 
 ## Current Scope
 
-- Mobile-first browser UI
-- Landing page with:
-  - `Login with OIDC` placeholder
-  - guest name entry
-- Lobby showing open games with:
-  - host name
-  - created time
-  - topic
-  - question count
-- Create new game flow
-- Join existing game flow
-- Waiting room for player two
-- Question screen with:
-  - 5 answer options
-  - 30-second countdown
-  - locked-in answers
-- Reveal screen showing:
-  - correct answer
-  - whether each player was correct
-  - updated scores
-- Waiting-for-next synchronization state
-- Final results screen with `Back to lobby`
+- Landing page with guest entry and OIDC login initiation
+- Lobby showing open games with host name, created time, topic, question count, and game id
+- Create-game flow with topic selection and variable question counts
+- Join-game flow from the lobby
+- Waiting room for hosted games before player two joins
+- Question screen with five answer options, server-driven countdown, and locked answers
+- Reveal screen with the correct answer, per-player correctness, and updated scores
+- Waiting-for-next state until both players continue
+- Final results screen with return to lobby
+- Connection status banner for connecting, connected, and disconnected states
+
+## Backend Modes
+
+- Mock backend is used by default when `VITE_WS_URL` is not set.
+- Real backend is used when `VITE_WS_URL` is set and `VITE_USE_MOCK_BACKEND` is not `true`.
+- The expected WebSocket contract is documented in [protocol.md](./protocol.md).
+- A Bun-based protocol runner is included for exercising that contract against a backend implementation.
 
 ## Tech Stack
 
@@ -40,18 +35,13 @@ This repository currently focuses on the client only. Server-side room managemen
 - `Vitest`
 - `Testing Library`
 
-## Project Structure
+## Architecture
 
-- `src/App.tsx`
-  Main UI flow and route rendering.
-- `src/backend/`
-  Backend transport layer, including the real WebSocket client, protocol types, and mock fallback transport.
-- `src/types.ts`
-  Shared quiz, lobby, player, and session types.
-- `src/App.css`
-  Screen-level styling.
-- `src/index.css`
-  Global visual system and base styles.
+- React single-page app with routed landing, lobby, and game screens
+- State-machine-driven client flow for lobby and match state
+- Backend transport abstraction with mock and WebSocket implementations
+- Shared frontend types for lobby, session, player, and question data
+- Protocol documentation in [protocol.md](./protocol.md)
 
 ## Development
 
@@ -61,37 +51,43 @@ Install dependencies:
 bun install
 ```
 
-Start the dev server:
+Start the app with the default mock backend:
 
 ```bash
 bun run dev
 ```
 
-Environment switches:
+Connect to a real backend over WebSocket:
 
 ```bash
 VITE_WS_URL=ws://localhost:8080 bun run dev
 ```
 
-OIDC configuration:
+Use OIDC as well:
 
 ```bash
 VITE_IDP_URL=https://idp.example.com VITE_WS_URL=ws://localhost:8080 bun run dev
 ```
 
-Use the mock backend explicitly:
+Force the mock backend even when `VITE_WS_URL` is present:
 
 ```bash
 VITE_USE_MOCK_BACKEND=true bun run dev
 ```
 
-Run the production build:
+Build:
 
 ```bash
 bun run build
 ```
 
-Run linting:
+Preview the production build:
+
+```bash
+bun run preview
+```
+
+Lint:
 
 ```bash
 bun run lint
@@ -103,57 +99,38 @@ Run tests:
 bun run test
 ```
 
-Run the scripted WebSocket protocol exercise:
+Run tests in watch mode:
+
+```bash
+bun run test:watch
+```
+
+Exercise a WebSocket backend against the documented protocol:
 
 ```bash
 bun run ws:protocol -- --url ws://localhost:8080
 ```
 
-Useful flags:
+Example with extra tracing and custom players:
 
 ```bash
 bun run ws:protocol -- --trace-json --host-name Mira --joiner-name Jonah --topic Science
 ```
 
-## Mocked Backend Behavior
+## Mock Backend Behavior
 
-Until the real backend exists, the frontend uses a mocked session layer that simulates:
+The mock transport is intended for local UI development and tests. It currently provides:
 
-- open games in the lobby
-- creating and joining games
-- a second player joining after a short delay
-- timed questions
-- answer locking
-- reveal timing
-- opponent readiness for the next round
-
-This lets the browser flow be designed and tested without committing to a backend implementation too early.
-
-## Backend Contract Assumptions
-
-The future backend should be authoritative for:
-
-- available lobby games
-- player roster
-- question payloads
-- `questionEndsAt`
-- answer reveal timing
-- scores
-- next-round readiness
-- final results
-
-The frontend should only send player intents such as:
-
-- create game
-- join game
-- submit answer
-- ready for next question
-- return to lobby
-
-The expected WebSocket message contract and game/lobby state machine are documented in [protocol.md](./protocol.md).
+- a seeded lobby with open games
+- creation and joining flows
+- automatic second-player join for hosted games
+- topic-based question decks with five options per question
+- 30-second timed rounds
+- answer locking and reveal transitions
+- simulated opponent readiness for the next round
 
 ## Notes
 
-- OIDC is handled by the frontend over HTTP, not by the WebSocket backend. The frontend calls `${IDP_URL}/me`, redirects to `${IDP_URL}/login?redirect={MY_HOST}` on `401`, and retries `/me` after returning.
-- Reconnect handling is out of scope for the current version.
+- OIDC is handled over HTTP by the frontend. It calls `${VITE_IDP_URL}/me`, redirects to `${VITE_IDP_URL}/login?redirect={currentAppUrl}` on `401`, and resumes on return.
+- Reconnect and session resume are not implemented yet.
 - Duplicate guest names are currently allowed.
