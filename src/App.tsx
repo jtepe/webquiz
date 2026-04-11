@@ -127,15 +127,15 @@ const appMachine = setup({
   },
 })
 
-const TOPIC_OPTIONS = ['Science', 'Cinema', 'World'] as const
-const QUESTION_COUNT_OPTIONS = [10, 12, 15]
+const TOPIC_OPTIONS = ['Science', 'Nerd', 'Sherlock Holmes'] as const
+const QUESTION_COUNT_OPTIONS = [3, 5, 7]
 
 function App() {
   const navigate = useNavigate()
   const [state, send] = useMachine(appMachine)
   const [guestName, setGuestName] = useState('')
   const [newGameTopic, setNewGameTopic] = useState<(typeof TOPIC_OPTIONS)[number]>('Science')
-  const [newGameQuestionCount, setNewGameQuestionCount] = useState(10)
+  const [newGameQuestionCount, setNewGameQuestionCount] = useState(3)
   const [now, setNow] = useState(() => Date.now())
 
   const transport = useMemo(() => createBackendTransport(), [])
@@ -558,6 +558,15 @@ function GameScreen(props: GameScreenProps) {
   const opponent =
     props.session.players.find((player) => player.id !== localPlayer.id) ?? props.session.players[1]
   const questionNumber = Math.min(props.session.questionIndex + 1, props.session.totalQuestions)
+  const finalStandings = [...props.session.players].sort(
+    (left, right) =>
+      right.score - left.score ||
+      (left.id === localPlayer.id ? -1 : right.id === localPlayer.id ? 1 : 0),
+  )
+  const isDraw =
+    finalStandings.length >= 2 && finalStandings[0].score === finalStandings[1].score
+  const scoreGap =
+    finalStandings.length >= 2 ? Math.abs(finalStandings[0].score - finalStandings[1].score) : 0
 
   return (
     <main className="screen game-screen">
@@ -606,7 +615,7 @@ function GameScreen(props: GameScreenProps) {
               <p className="eyebrow">
                 Question {questionNumber} of {props.session.totalQuestions}
               </p>
-              <h1>{props.session.currentQuestion.prompt}</h1>
+              <h1 className="question-prompt">{props.session.currentQuestion.prompt}</h1>
             </div>
             <div className="timer">
               <span>Time left</span>
@@ -642,7 +651,7 @@ function GameScreen(props: GameScreenProps) {
       {props.session.phase === 'answer_reveal' && props.session.currentQuestion ? (
         <section className="section-card reveal-card">
           <p className="eyebrow">Answer reveal</p>
-          <h1>{props.session.currentQuestion.prompt}</h1>
+          <h1 className="question-prompt">{props.session.currentQuestion.prompt}</h1>
           <div className="reveal-banner">
             <span>Correct answer</span>
             <strong>
@@ -673,7 +682,7 @@ function GameScreen(props: GameScreenProps) {
       {props.session.phase === 'waiting_for_next' ? (
         <section className="section-card waiting-card">
           <p className="eyebrow">Waiting</p>
-          <h1>Round locked. Waiting for both players to continue.</h1>
+          <h1 className="phase-title">Round locked. Waiting for both players to continue.</h1>
           <div className="waiting-grid">
             {props.session.players.map((player) => (
               <div key={player.id}>
@@ -687,15 +696,60 @@ function GameScreen(props: GameScreenProps) {
 
       {props.session.phase === 'results' ? (
         <section className="section-card results-card">
-          <p className="eyebrow">Final score</p>
-          <h1>{props.session.winnerLabel}</h1>
-          <div className="result-grid">
-            {props.session.players.map((player) => (
-              <article key={player.id} className="result-card neutral">
-                <span>{player.id === localPlayer.id ? 'You' : player.name}</span>
-                <strong>{player.score} points</strong>
-              </article>
-            ))}
+          <div className="results-summary">
+            <div>
+              <p className="eyebrow">Final result</p>
+              <h1 className="results-title">{props.session.winnerLabel}</h1>
+              <p className="support-copy results-copy">
+                {isDraw
+                  ? `Both players finished level after ${props.session.totalQuestions} questions.`
+                  : `${finalStandings[0]?.name ?? 'The winner'} finished ${scoreGap} point${scoreGap === 1 ? '' : 's'} ahead.`}
+              </p>
+            </div>
+            <div className="results-facts">
+              <div className="results-fact">
+                <span>Topic</span>
+                <strong>{props.session.topic}</strong>
+              </div>
+              <div className="results-fact">
+                <span>Questions</span>
+                <strong>{props.session.totalQuestions}</strong>
+              </div>
+              <div className="results-fact">
+                <span>Margin</span>
+                <strong>{isDraw ? 'Level' : `${scoreGap} pt`}</strong>
+              </div>
+            </div>
+          </div>
+          <div className="standings-grid">
+            {finalStandings.map((player, index) => {
+              const isLocal = player.id === localPlayer.id
+              const placementLabel = isDraw ? 'Tied' : index === 0 ? 'Winner' : 'Runner-up'
+
+              return (
+                <article
+                  key={player.id}
+                  className={`standing-card ${index === 0 ? 'is-leading' : ''} ${isLocal ? 'is-local' : ''} ${isDraw ? 'is-draw' : ''}`}
+                >
+                  <div className="standing-card-top">
+                    <span className="standing-badge">{placementLabel}</span>
+                    <span className="standing-side">{isLocal ? 'You' : 'Opponent'}</span>
+                  </div>
+                  <strong className="standing-name">{player.name}</strong>
+                  <p className="standing-score">
+                    {player.score}
+                    <span>pts</span>
+                  </p>
+                  <p className="standing-detail">
+                    {isDraw
+                      ? 'Dead even at the final whistle.'
+                      : index === 0
+                        ? 'Top score in the match.'
+                        : `${finalStandings[0]?.name ?? 'Winner'} closed ahead.`}
+                  </p>
+                </article>
+              )
+            })}
           </div>
           <button className="primary-button" onClick={props.onBackToLobby} type="button">
             Back to lobby

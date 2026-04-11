@@ -305,6 +305,31 @@
   flex-wrap: wrap;
 }
 
+.question-topline > div:first-child {
+  flex: 1 1 28rem;
+  min-width: min(100%, 18rem);
+}
+
+.question-prompt {
+  max-width: 24ch;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: clamp(1.65rem, 1.15rem + 2vw, 2.7rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+
+.phase-title {
+  max-width: 22ch;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.15rem);
+  font-weight: 600;
+  line-height: 1.14;
+  letter-spacing: -0.02em;
+  text-wrap: pretty;
+}
+
 .timer {
   flex: 0 0 clamp(7.5rem, 22vw, 9.25rem);
   min-width: 7.5rem;
@@ -384,6 +409,145 @@
   background: linear-gradient(180deg, rgba(245, 242, 235, 0.98), rgba(255, 255, 255, 0.98));
 }
 
+.results-card {
+  display: grid;
+  gap: 18px;
+}
+
+.results-summary {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 24px;
+  border: 1px solid var(--border-strong);
+  background:
+    radial-gradient(circle at top right, rgba(242, 92, 84, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(255, 247, 237, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.results-title {
+  max-width: 14ch;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: clamp(1.85rem, 1.25rem + 2.5vw, 3.1rem);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.results-copy {
+  margin-top: 12px;
+}
+
+.results-facts,
+.standings-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.results-fact,
+.standing-card {
+  border-radius: 22px;
+  border: 1px solid var(--border-soft);
+}
+
+.results-fact {
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.results-fact span,
+.standing-badge,
+.standing-side {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.results-fact strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-strong);
+}
+
+.standing-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(255, 250, 244, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.standing-card.is-leading {
+  background:
+    radial-gradient(circle at top right, rgba(242, 92, 84, 0.2), transparent 46%),
+    linear-gradient(180deg, rgba(255, 241, 229, 0.98), rgba(255, 252, 247, 0.98));
+  border-color: rgba(242, 92, 84, 0.26);
+}
+
+.standing-card.is-local {
+  box-shadow: inset 0 0 0 1px rgba(242, 92, 84, 0.16);
+}
+
+.standing-card.is-draw {
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.98), rgba(255, 255, 255, 0.98));
+}
+
+.standing-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.standing-badge {
+  color: var(--accent);
+}
+
+.standing-side {
+  color: var(--muted);
+}
+
+.standing-name {
+  display: block;
+  margin: 0;
+  font-size: clamp(1.2rem, 1rem + 1vw, 1.65rem);
+  line-height: 1.05;
+  color: var(--text-strong);
+}
+
+.standing-score {
+  margin: 0;
+  color: var(--text-strong);
+  font-family:
+    "Archivo Narrow", "Arial Narrow", "Franklin Gothic Medium", sans-serif;
+  font-size: clamp(3rem, 1.9rem + 5vw, 4.75rem);
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+}
+
+.standing-score span {
+  margin-left: 8px;
+  font-family: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.standing-detail {
+  margin: 0;
+  color: var(--muted);
+  max-width: 24ch;
+}
+
+.results-card > .primary-button {
+  width: auto;
+  min-width: 11rem;
+  justify-self: start;
+}
+
 .waiting-grid {
   margin-top: 18px;
 }
@@ -405,6 +569,16 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .results-summary {
+    grid-template-columns: minmax(0, 1.25fr) minmax(15rem, 0.75fr);
+    align-items: end;
+  }
+
+  .results-facts,
+  .standings-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .answers-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -413,6 +587,16 @@
 @media (max-width: 759px) {
   .hero-panel h1 {
     max-width: 12ch;
+  }
+
+  .question-prompt {
+    max-width: none;
+    font-size: clamp(1.45rem, 1.1rem + 3vw, 2.1rem);
+  }
+
+  .phase-title {
+    max-width: none;
+    font-size: clamp(1.35rem, 1.05rem + 2.3vw, 1.85rem);
   }
 
   .timer {
