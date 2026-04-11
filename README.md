@@ -99,6 +99,8 @@ Run tests:
 bun run test
 ```
 
+Use `bun run test`, not `bun test`. The suite is configured for Vitest with `jsdom`, and running it through Bun's built-in test runner will fail on browser globals and Vitest-specific helpers.
+
 Run tests in watch mode:
 
 ```bash

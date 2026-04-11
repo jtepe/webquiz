@@ -42,6 +42,11 @@ Common envelope fields:
 
 Server-pushed messages do not need `requestId`, but may include it when replying to a specific request.
 
+Implementation note:
+
+- This envelope is intentionally compatible with `serde`'s adjacently tagged enum pattern using `type` as the tag and `payload` as the content field.
+- In Rust, this maps cleanly to an outer message struct with `requestId` plus a flattened enum for the message body.
+
 ## Shared Data Shapes
 
 ### Lobby Game Summary
@@ -66,6 +71,27 @@ Server-pushed messages do not need `requestId`, but may include it when replying
   "isReadyForNext": false
 }
 ```
+
+This is the base player shape used by most messages.
+
+### Revealed Player Summary
+
+Used specifically by `question.revealed`.
+
+```json
+{
+  "id": "player_1",
+  "name": "Mira",
+  "score": 3,
+  "isReadyForNext": false,
+  "didAnswerCorrectly": true
+}
+```
+
+Notes:
+
+- `didAnswerCorrectly` is only sent during answer reveal.
+- It is not part of the base `Player Summary` shape.
 
 ### Question
 
@@ -513,6 +539,7 @@ Rules:
 - If a player did not answer before timeout, the backend should treat that as `no answer`.
 - The reveal must still include correctness booleans for both players.
 - The frontend shows whether the opponent was correct, not which option the opponent selected.
+- The `players` array in this message uses the `Revealed Player Summary` shape rather than the base `Player Summary`.
 
 ### `question.next.waiting`
 
