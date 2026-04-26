@@ -1,10 +1,13 @@
 const PENDING_OIDC_KEY = 'webquiz.pendingOidcLogin'
 
 type IdpUser = {
-  displayName?: string
+  sub?: string
   name?: string
-  username?: string
+  given_name?: string
+  family_name?: string
+  preferred_username?: string
   email?: string
+  email_verified?: boolean
 }
 
 function getIdpUrl() {
@@ -45,7 +48,7 @@ export async function beginOrResumeOidcLogin() {
   }
 
   const user = (await response.json()) as IdpUser
-  const displayName = user.displayName ?? user.name ?? user.username ?? user.email
+  const displayName = user.preferred_username ?? user.name ?? user.email
 
   if (!displayName) {
     throw new Error('OIDC user details did not include a usable display name.')
