@@ -127,7 +127,7 @@ const appMachine = setup({
   },
 })
 
-const TOPIC_OPTIONS = ['Science', 'Nerd', 'Sherlock Holmes'] as const
+const TOPIC_OPTIONS = ['Science', 'Nerd Stuff', 'Geography'] as const
 const QUESTION_COUNT_OPTIONS = [3, 5, 7]
 
 function App() {
@@ -393,7 +393,7 @@ function LandingScreen(props: LandingScreenProps) {
             <strong>Realtime head-to-head</strong>
           </article>
           <article className="hero-card">
-            <span>30 seconds</span>
+            <span>15 seconds</span>
             <strong>One locked answer each round</strong>
           </article>
           <article className="hero-card">
