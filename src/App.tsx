@@ -691,6 +691,11 @@ function GameScreen(props: GameScreenProps) {
               </div>
             ))}
           </div>
+          {!localPlayer.isReadyForNext ? (
+            <button className="primary-button" onClick={props.onReadyForNext} type="button">
+              Next question
+            </button>
+          ) : null}
         </section>
       ) : null}
 
